@@ -4,6 +4,7 @@ import logging
 import os
 import os.path
 import sys
+import threading
 
 from panoramix.matcher import Any, match
 
@@ -29,6 +30,7 @@ logger = logging.getLogger(__name__)
 
 _abi = None
 _func = None
+_lock = threading.Lock()
 
 
 def set_func_params_if_none(params):
@@ -163,17 +165,22 @@ def make_abi(hash_targets):
     hash_name = str(sorted(list(hash_targets.keys()))).encode("utf-8")
     hash_name = hashlib.sha256(hash_name).hexdigest()
 
+    _lock.acquire()
+
     dir_name = (
         cache_dir() / "pabi" / hash_name[:3]
     )  #:3, because there's not '0x' at the beginning
+
+
     if not dir_name.is_dir():
-        dir_name.mkdir(parents=True)
+        dir_name.mkdir(parents=True, exist_ok=True)
 
     cache_fname = dir_name / (hash_name + ".pabi")
 
     if cache_fname.is_file():
         with cache_fname.open() as f:
             _abi = json.loads(f.read())
+        _lock.release()
         logger.info("Cache for PABI found.")
         return _abi
 
@@ -220,6 +227,7 @@ def make_abi(hash_targets):
     with cache_fname.open("w+") as f:
         f.write(json.dumps(result, indent=2))
 
+    _lock.release()
     logger.info("Cache for PABI generated.")
 
     return result

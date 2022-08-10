@@ -635,6 +635,6 @@ def replace_f_stop(in_exp, f):
 def cache_dir() -> Path:
     panoramix_cache_dir = Path(user_cache_dir("panoramix", "panoramix"))
     if not panoramix_cache_dir.is_dir():
-        panoramix_cache_dir.mkdir(parents=True)
+        panoramix_cache_dir.mkdir(parents=True, exist_ok=True)
 
     return panoramix_cache_dir

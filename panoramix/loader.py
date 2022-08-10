@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import os.path
+import threading
 import traceback
 
 from panoramix.matcher import match
@@ -28,6 +29,8 @@ cache_sigs = {
 }
 
 LOADER_TIMEOUT = 60
+
+_lock = threading.Lock()
 
 
 class Loader(EasyCopy):
@@ -85,9 +88,11 @@ class Loader(EasyCopy):
         assert address.isalnum()
         address = address.lower()
 
+        _lock.acquire()
+
         dir_ = cache_dir() / "code" / address[:5]
         if not dir_.is_dir():
-            dir_.mkdir(parents=True)
+            dir_.mkdir(parents=True, exist_ok=True)
 
         cache_fname = dir_ / f"{address}.bin"
 
@@ -104,6 +109,8 @@ class Loader(EasyCopy):
             if code:
                 with cache_fname.open("w+") as f:
                     f.write(code)
+
+        _lock.release()
 
         self.load_binary(code)
 
