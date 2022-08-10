@@ -9,6 +9,8 @@ import urllib.request
 from pathlib import Path
 from zipfile import ZipFile
 
+from panoramix.utils.db import get_sqlite3_cursor
+
 from panoramix.utils.helpers import (
     COLOR_BLUE,
     COLOR_BOLD,
@@ -53,8 +55,6 @@ from panoramix.utils.helpers import (
 
 logger = logging.getLogger(__name__)
 
-conn = None
-
 
 def supplements_path():
     return cache_dir() / "supplement.db"
@@ -79,22 +79,8 @@ def check_supplements():
 
 
 def _cursor():
-    global conn
-
     check_supplements()
-
-    if conn is None:
-        conn = sqlite3.connect(supplements_path())
-
-    # try:
-    c = conn.cursor()
-    # except Exception:
-    #    # fails in multi-threading, this should help
-    #    conn = sqlite3.connect("supplement.db")
-    #    return conn.cursor()
-
-    return c
-
+    return get_sqlite3_cursor(supplements_path())
 
 @cached
 def fetch_sigs(hash):
@@ -146,7 +132,7 @@ def fetch_sig(hash):
 
 
 """
-    
+
     Abi crawler and parser. used to refill supplement.py with new ABI/func definitions.
     It's used by scripts that are not a part of panoramix repo.
 

@@ -1,0 +1,5 @@
+{
+  "belcar.pyright.validation_enabled" : false,
+  "cc.aeron.nova-black.formatOnSave" : false,
+  "cc.aeron.nova-isort.formatOnSave" : false
+}
