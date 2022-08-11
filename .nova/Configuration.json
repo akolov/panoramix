@@ -1,5 +1,14 @@
 {
-  "belcar.pyright.validation_enabled" : false,
-  "cc.aeron.nova-black.formatOnSave" : false,
-  "cc.aeron.nova-isort.formatOnSave" : false
+  "belcar.pyright.validation_enabled" : true,
+  "cc.aeron.nova-black.executablePath" : "\/opt\/homebrew\/bin\/black",
+  "cc.aeron.nova-black.formatOnSave" : true,
+  "cc.aeron.nova-flake8.checkMode" : "onSave",
+  "cc.aeron.nova-flake8.executablePath" : "\/opt\/homebrew\/bin\/flake8p",
+  "cc.aeron.nova-isort.executablePath" : "\/opt\/homebrew\/bin\/isort",
+  "cc.aeron.nova-isort.formatOnSave" : true,
+  "cc.aeron.nova-isort.venvPath" : ".env",
+  "cc.aeron.nova-mypy.checkMode" : "onSave",
+  "cc.aeron.nova-mypy.executablePath" : "\/opt\/homebrew\/bin\/mypy",
+  "cc.aeron.nova-mypy.pythonExecutablePath" : ".env\/bin\/python",
+  "python.interpreter" : ".env\/bin\/python"
 }
