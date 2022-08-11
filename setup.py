@@ -32,9 +32,19 @@ REQUIRED = [
 
 TESTS_REQUIRE = []
 
+EXTRAS_DEV = [
+    "black~=22.6.0",
+    "flake8-pyproject~=1.0.1",
+    "isort~=5.10.1",
+    "mypy~=0.961",
+    "mypy-extensions~=0.4.3",
+    "debugpy~=1.6.0",
+]
+
 # What packages are optional?
 EXTRAS = {
-    # 'fancy feature': ['django'],
+    "all": EXTRAS_DEV,
+    "dev": EXTRAS_DEV
 }
 
 VERSION = "0.4"
