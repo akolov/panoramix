@@ -1,10 +1,12 @@
-import os
+import logging
 import math
+import os
 import re
 import string
-import logging
+import threading
 from copy import copy, deepcopy
 from pathlib import Path
+
 from appdirs import user_cache_dir
 
 COLOR_HEADER = "\033[95m"
@@ -42,6 +44,7 @@ colors = {
 
 logger = logging.getLogger(__name__)
 
+
 def convert(text):
 
     for asci, html in colors.items():
@@ -49,9 +52,7 @@ def convert(text):
 
     text = text.replace("\033[1m", '<span style="font-weight:bold">')
 
-    text = re.sub(
-        r"»#(.*)\n", '<span style="color:rgb(111, 110, 111)">#\\1</span>\n', text
-    )
+    text = re.sub(r"»#(.*)\n", '<span style="color:rgb(111, 110, 111)">#\\1</span>\n', text)
 
     text = text.replace("»", "&raquo;")
 
@@ -81,9 +82,7 @@ class C:
     def asm(s):
         return "\033[38;5;33m" + s + C.endc
 
-    every = set(
-        [header, blue, okgreen, warning, red, bold, underline, green, gray, endc]
-    )
+    every = set([header, blue, okgreen, warning, red, bold, underline, green, gray, endc])
 
 
 def color(exp, color, add_color=True):
@@ -155,7 +154,7 @@ def cached(func):
         key = args + tuple(kwargs.items())
         try:
             return cache[key]
-        except TypeError: # If it contains lists.
+        except TypeError:  # If it contains lists.
             return func(*args, **kwargs)
         except KeyError:
             pass
@@ -203,9 +202,7 @@ def rewrite_trace(trace, f):
             res.extend(f(line))
         else:
             cond, if_true, if_false = line[1:]
-            res.append(
-                ("if", cond, rewrite_trace(if_true, f), rewrite_trace(if_false, f))
-            )
+            res.append(("if", cond, rewrite_trace(if_true, f), rewrite_trace(if_false, f)))
 
     return res
 
@@ -373,9 +370,7 @@ def replace_lines(trace, f):
 
         elif opcode(line) == "if" and len(line) == 4:
             _, cond, if_true, if_false = line
-            res.append(
-                ("if", f(cond), replace_lines(if_true, f), replace_lines(if_false, f))
-            )
+            res.append(("if", f(cond), replace_lines(if_true, f), replace_lines(if_false, f)))
 
         else:
             res.append(f(line))
@@ -447,7 +442,7 @@ def parse_data(value):
     if len(value) == 32 * 2 + 2:
         value = int(value, 16)
 
-        if value > 10 ** 9 and value // 10 ** 9 != 0:
+        if value > 10**9 and value // 10**9 != 0:
             value = hex(value)
         else:
             value = nice_int(value)
@@ -464,16 +459,12 @@ def parse_data(value):
 
         out2 = []
         for o in out:
-            if o > 10 ** 9 and o // 10 ** 9 != 0:
+            if o > 10**9 and o // 10**9 != 0:
                 out2.append(hex(o))
             else:
                 out2.append(o)
 
-        if (
-            len(out2) == 3
-            and out2[0] == 32
-            and out2[2][-64 + out2[1] * 2 :] == "0" * (64 - out2[1] * 2)
-        ):
+        if len(out2) == 3 and out2[0] == 32 and out2[2][-64 + out2[1] * 2 :] == "0" * (64 - out2[1] * 2):
             out2 = pretty_bignum(int(out2[2][: out2[1] * 2 + 2], 16))
 
         return str(out2)
@@ -591,7 +582,6 @@ def replace_f(in_exp, f):
     keep_type = type(in_exp)
     res = keep_type(replace_f(e, f) for e in in_exp)
 
-
     return f(res)
 
 
@@ -614,7 +604,7 @@ def replace(in_exp, what, by_what):
 
 def replace_f_stop(in_exp, f):
     """Like replace_f, but the function returns None when no replacement needs
-       to be made. If it returns something we replace it and stop."""
+    to be made. If it returns something we replace it and stop."""
     modified_in_exp = f(in_exp)
     if modified_in_exp is not None:
         return modified_in_exp
