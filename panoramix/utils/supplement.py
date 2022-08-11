@@ -51,6 +51,7 @@ def compressed_supplements_path():
 def decompress_supplements():
     compressed = compressed_supplements_path()
     decompressed = decompressed_supplements_path()
+    logger.info("Decompressing %s into %s...", compressed, decompressed)
     if not decompressed.is_file():
         with lzma.open(compressed) as inf, decompressed.open("wb") as outf:
             while buf := inf.read(1024 * 1024):
