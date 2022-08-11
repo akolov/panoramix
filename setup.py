@@ -6,11 +6,10 @@ publish to pypi w/o having to convert Readme.md to RST:
     1) #> python setup.py sdist bdist_wheel
     2) #> twine upload dist/*   #<specify bdist_wheel version to upload>; #optional --repository <testpypi> or  --repository-url <testpypi-url>
 """
-from setuptools import setup, find_packages
-from setuptools.command.install import install
-import sys
-import os
 import io
+import os
+
+from setuptools import find_packages, setup
 
 # Package meta-data.
 NAME = "panoramix-decompiler"
@@ -42,10 +41,7 @@ EXTRAS_DEV = [
 ]
 
 # What packages are optional?
-EXTRAS = {
-    "all": EXTRAS_DEV,
-    "dev": EXTRAS_DEV
-}
+EXTRAS = {"all": EXTRAS_DEV, "dev": EXTRAS_DEV}
 
 VERSION = "0.4"
 
@@ -82,5 +78,5 @@ setup(
     python_requires=REQUIRES_PYTHON,
     extras_require=EXTRAS,
     include_package_data=True,
-    entry_points={"console_scripts": ["panoramix=panoramix.__main__:main"]}, # deploy panoramix shell command
+    entry_points={"console_scripts": ["panoramix=panoramix.__main__:main"]},  # deploy panoramix shell command
 )
