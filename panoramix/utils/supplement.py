@@ -1,31 +1,10 @@
 import json
 import logging
 import lzma
-import os
-import sqlite3
-import sys
-import time
-import urllib.request
 from pathlib import Path
-from zipfile import ZipFile
 
 from panoramix.utils.db import get_sqlite3_cursor
-
-from panoramix.utils.helpers import (
-    COLOR_BLUE,
-    COLOR_BOLD,
-    COLOR_GRAY,
-    COLOR_GREEN,
-    COLOR_HEADER,
-    COLOR_OKGREEN,
-    COLOR_UNDERLINE,
-    COLOR_WARNING,
-    ENDC,
-    FAIL,
-    cache_dir,
-    cached,
-    opcode,
-)
+from panoramix.utils.helpers import cache_dir, cached
 
 """
     a module for management of bytes4 signatures from the database
@@ -34,8 +13,8 @@ from panoramix.utils.helpers import (
 
      hash - 0x12345678
      name - transferFrom
-     folded_name - transferFrom(address,address,uint256)
-     cooccurs - comma-dellimeted list of hashes: `0x12312312,0xabababab...`
+     folded_name - transferFrom(address, address, uint256)
+     cooccurs - comma-delimited list of hashes: `0x12312312,0xabababab...`
      params - json: `[
             {
               "type": "address",
@@ -63,16 +42,10 @@ def supplements_path():
 def check_supplements():
     panoramix_supplements = supplements_path()
     if not panoramix_supplements.is_file():
-        compressed_supplements = (
-            Path(__file__).parent.parent / "data" / "supplement.db.xz"
-        )
-        logger.info(
-            "Decompressing %s into %s...", compressed_supplements, panoramix_supplements
-        )
-        with lzma.open(compressed_supplements) as inf, panoramix_supplements.open(
-            "wb"
-        ) as outf:
-            while (buf := inf.read(1024 * 1024)) :
+        compressed_supplements = Path(__file__).parent.parent / "data" / "supplement.db.xz"
+        logger.info("Decompressing %s into %s...", compressed_supplements, panoramix_supplements)
+        with lzma.open(compressed_supplements) as inf, panoramix_supplements.open("wb") as outf:
+            while buf := inf.read(1024 * 1024):
                 outf.write(buf)
 
     assert panoramix_supplements.is_file()
@@ -81,6 +54,7 @@ def check_supplements():
 def _cursor():
     check_supplements()
     return get_sqlite3_cursor(supplements_path())
+
 
 @cached
 def fetch_sigs(hash):
@@ -158,9 +132,7 @@ def crawl_abis_from_cache():
     try:
         from web3 import Web3
     except Exception:
-        print(
-            "install web3:\n\t`pip install web3`"
-        )  # the only dependency in the project :D
+        print("install web3:\n\t`pip install web3`")  # the only dependency in the project :D
 
     conn = sqlite3.connect("supplement.db")
     cursor = conn.cursor()
@@ -242,18 +214,14 @@ def crawl_abis_from_cache():
             results = cursor.fetchall()
             if len(results) == 0:
                 print("inserting", sha3, row["folded_name"])
-                cursor.execute(
-                    "INSERT INTO functions VALUES (?, ?, ?, ?, ?)", insert_row
-                )
+                cursor.execute("INSERT INTO functions VALUES (?, ?, ?, ?, ?)", insert_row)
                 conn.commit()
 
             cursor2.execute("SELECT * from functions where hash=?", (insert_row2[0],))
             results = cursor2.fetchall()
             if len(results) == 0:
                 print("inserting2", sha3, row["folded_name"])
-                cursor2.execute(
-                    "INSERT INTO functions VALUES (?, ?, ?, ?)", insert_row2
-                )
+                cursor2.execute("INSERT INTO functions VALUES (?, ?, ?, ?)", insert_row2)
 
                 conn2.commit()
 
@@ -263,9 +231,7 @@ def crawl_abis_from_cache():
         path = "./cache_abis/"
 
         if not os.path.isdir(path):
-            print(
-                "dir cache_abis doesn't exist. it should be there and it should contain abi files"
-            )
+            print("dir cache_abis doesn't exist. it should be there and it should contain abi files")
             return
 
         for fname in os.listdir(path):
