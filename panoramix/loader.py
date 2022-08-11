@@ -2,20 +2,20 @@ import json
 import logging
 import os
 import os.path
-import threading
 import traceback
+from threading import local
 
 from panoramix.matcher import match
 from panoramix.utils.helpers import (
     COLOR_GRAY,
     ENDC,
     EasyCopy,
+    cache_dir,
     colorize,
     find_f,
     find_f_list,
     padded_hex,
     pretty_bignum,
-    cache_dir,
 )
 from panoramix.utils.opcode_dict import opcode_dict
 from panoramix.utils.signatures import get_func_name, make_abi
@@ -23,14 +23,19 @@ from panoramix.utils.supplement import fetch_sig
 
 logger = logging.getLogger(__name__)
 
-cache_sigs = {
-    True: {},
-    False: {},
-}
+
+class CacheSigs(local):
+    def __init__(self):
+        super().__init__()
+        self.storage = {
+            True: {},
+            False: {},
+        }
+
+
+cache_sigs = CacheSigs()
 
 LOADER_TIMEOUT = 60
-
-_lock = threading.Lock()
 
 
 class Loader(EasyCopy):
@@ -41,6 +46,8 @@ class Loader(EasyCopy):
 
     @staticmethod
     def find_sig(sig, add_color=False):
+        global cache_sigs
+
         if "???" in sig:
             return None
 
@@ -48,8 +55,8 @@ class Loader(EasyCopy):
             if "unknown" not in Loader.signatures[sig]:
                 return Loader.signatures[sig]
 
-        if sig in cache_sigs[add_color]:
-            return cache_sigs[add_color][sig]
+        if sig in cache_sigs.storage[add_color]:
+            return cache_sigs.storage[add_color][sig]
 
         if len(sig) < 8:
             return None
@@ -62,17 +69,12 @@ class Loader(EasyCopy):
         if "params" in a:
             res = "{}({})".format(
                 a["name"],
-                ", ".join(
-                    [
-                        colorize(x["type"], COLOR_GRAY, add_color) + " " + x["name"][1:]
-                        for x in a["params"]
-                    ]
-                ),
+                ", ".join([colorize(x["type"], COLOR_GRAY, add_color) + " " + x["name"][1:] for x in a["params"]]),
             )
         else:
             res = a["folded_name"]
 
-        cache_sigs[add_color][sig] = res
+        cache_sigs.storage[add_color][sig] = res
         return res
 
     def __init__(self):
@@ -88,9 +90,7 @@ class Loader(EasyCopy):
         assert address.isalnum()
         address = address.lower()
 
-        _lock.acquire()
-
-        dir_ = cache_dir() / "code" / address[:5]
+        dir_ = cache_dir(True) / "code" / address[:5]
         if not dir_.is_dir():
             dir_.mkdir(parents=True, exist_ok=True)
 
@@ -109,8 +109,6 @@ class Loader(EasyCopy):
             if code:
                 with cache_fname.open("w+") as f:
                     f.write(code)
-
-        _lock.release()
 
         self.load_binary(code)
 
@@ -139,9 +137,7 @@ class Loader(EasyCopy):
 
             def find_default(exp):
 
-                if (m := match(exp, ("if", ":cond", ":if_true", ":if_false"))) and str(
-                    ("cd", 0)
-                ) in str(m.cond):
+                if (m := match(exp, ("if", ":cond", ":if_true", ":if_false"))) and str(("cd", 0)) in str(m.cond):
                     if find_f_list(m.if_false, func_calls) == []:
                         fi = m.if_false[0]
                         if m2 := match(fi, ("jd", ":jd")):
@@ -251,9 +247,7 @@ class Loader(EasyCopy):
 
         for line_no, op, param in parsed_lines:
             if op[:4] == "push" and param > 1000000000000000:
-                param = pretty_bignum(
-                    param
-                )  # convert big numbers into strings if possibble
+                param = pretty_bignum(param)  # convert big numbers into strings if possibble
                 # should be moved to prettify really
 
             if op[:3] == "dup":

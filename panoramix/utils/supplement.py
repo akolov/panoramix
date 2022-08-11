@@ -1,8 +1,11 @@
 import json
 import logging
 import lzma
+import os
 import shutil
+import threading
 from pathlib import Path
+from sqlite3 import DatabaseError, OperationalError
 
 from panoramix.utils.db import get_sqlite3_cursor
 from panoramix.utils.helpers import cache_dir, cached
@@ -34,10 +37,11 @@ from panoramix.utils.helpers import cache_dir, cached
 """
 
 logger = logging.getLogger(__name__)
+_lock = threading.Lock()
 
 
 def supplements_path():
-    return cache_dir() / "supplement.db"
+    return cache_dir(False) / "supplement.db"
 
 
 def decompressed_supplements_path():
@@ -51,28 +55,46 @@ def compressed_supplements_path():
 def decompress_supplements():
     compressed = compressed_supplements_path()
     decompressed = decompressed_supplements_path()
-    logger.info("Decompressing %s into %s...", compressed, decompressed)
-    if not decompressed.is_file():
-        with lzma.open(compressed) as inf, decompressed.open("wb") as outf:
-            while buf := inf.read(1024 * 1024):
-                outf.write(buf)
+    with _lock:
+        logger.info("Decompressing %s into %s...", compressed, decompressed)
+        if not decompressed.is_file():
+            with lzma.open(compressed) as inf, decompressed.open("wb") as outf:
+                while buf := inf.read(1024 * 1024):
+                    outf.write(buf)
+
+        c = get_sqlite3_cursor(decompressed)
+        try:
+            c.execute("SELECT COUNT(1) FROM functions")
+        except (DatabaseError, OperationalError):
+            logger.exception("Could not properly decompress supplements")
+            os.remove(decompressed)
 
 
 def check_supplements():
     panoramix_supplements = supplements_path()
-    if not panoramix_supplements.is_file():
-        decompressed_supplements = decompressed_supplements_path()
-        if decompressed_supplements.is_file():
-            logger.info("Copying %s into %s...", decompressed_supplements, panoramix_supplements)
-            shutil.copy(decompressed_supplements, panoramix_supplements)
-        else:
-            compressed_supplements = compressed_supplements_path()
-            logger.info("Decompressing %s into %s...", compressed_supplements, panoramix_supplements)
-            with lzma.open(compressed_supplements) as inf, panoramix_supplements.open("wb") as outf:
-                while buf := inf.read(1024 * 1024):
-                    outf.write(buf)
 
-    assert panoramix_supplements.is_file()
+    with _lock:
+        if panoramix_supplements.is_file():
+            c = get_sqlite3_cursor(panoramix_supplements)
+            try:
+                c.execute("SELECT COUNT(1) FROM functions")
+            except (DatabaseError, OperationalError):
+                logger.exception("Invalid supplements")
+                os.remove(panoramix_supplements)
+
+        if not panoramix_supplements.is_file():
+            decompressed_supplements = decompressed_supplements_path()
+            if decompressed_supplements.is_file():
+                logger.info("Copying %s into %s...", decompressed_supplements, panoramix_supplements)
+                shutil.copy(decompressed_supplements, panoramix_supplements)
+            else:
+                compressed_supplements = compressed_supplements_path()
+                logger.info("Decompressing %s into %s...", compressed_supplements, panoramix_supplements)
+                with lzma.open(compressed_supplements) as inf, panoramix_supplements.open("wb") as outf:
+                    while buf := inf.read(1024 * 1024):
+                        outf.write(buf)
+
+        assert panoramix_supplements.is_file()
 
 
 def _cursor():

@@ -19,10 +19,10 @@ logger = logging.getLogger(__name__)
 def fold_stacks(self, latter, depth):
     """
 
-        When a loop is discovered, this function takes the stack from the beginningg
-        of the loop, and from the end of the loop, and tries to figure out the loop variables.
+    When a loop is discovered, this function takes the stack from the beginningg
+    of the loop, and from the end of the loop, and tries to figure out the loop variables.
 
-        It then returns a stack that has variables in it instead of values.
+    It then returns a stack that has variables in it instead of values.
 
     """
     assert len(self) == len(latter), (self, latter)
@@ -51,11 +51,7 @@ class Stack(EasyCopy):
         self.stack = val or []
 
     def __str__(self):
-        return (
-            "["
-            + (", ".join([prettify(el, parentheses=False) for el in self.stack]))
-            + "]"
-        )
+        return "[" + (", ".join([prettify(el, parentheses=False) for el in self.stack])) + "]"
 
     def light_copy(self):
         ret = copy(self)
@@ -116,11 +112,7 @@ class Stack(EasyCopy):
         res = []
 
         for el in self.stack:
-            if (
-                type(el) == int
-                and el in jump_dests
-                or (type(el) == int and el > 2000 and el < 5000)
-            ):
+            if type(el) == int and el in jump_dests or (type(el) == int and el > 2000 and el < 5000):
                 res.append(str(el))
 
         return res
@@ -208,9 +200,7 @@ class Stack(EasyCopy):
                     else:
                         stack[i] = ("bool", 0)
 
-                elif (
-                    s[0] == "iszero" and opcode(s[1]) == "bool" and type(s[1][1]) == int
-                ):
+                elif s[0] == "iszero" and opcode(s[1]) == "bool" and type(s[1][1]) == int:
                     stack[i] = ("bool", 1 - s[1][1])
 
                 elif stack[i][0] == "iszero" and opcode(stack[i][1]) == "iszero":

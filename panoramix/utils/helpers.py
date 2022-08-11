@@ -6,6 +6,7 @@ import string
 import threading
 from copy import copy, deepcopy
 from pathlib import Path
+from threading import local
 
 from appdirs import user_cache_dir
 
@@ -148,18 +149,18 @@ def before_after(func):
 
 
 def cached(func):
-    cache = {}
+    cache = local()
 
     def wrapper(*args, **kwargs):
         key = args + tuple(kwargs.items())
         try:
-            return cache[key]
+            return cache.__dict__[key]
         except TypeError:  # If it contains lists.
             return func(*args, **kwargs)
         except KeyError:
             pass
         ret = func(*args, **kwargs)
-        cache[key] = ret
+        cache.__dict__[key] = ret
         return ret
 
     return wrapper
@@ -622,8 +623,12 @@ def replace_f_stop(in_exp, f):
     return res
 
 
-def cache_dir() -> Path:
-    panoramix_cache_dir = Path(user_cache_dir("panoramix", "panoramix")) / str(threading.get_ident())
+def cache_dir(thread_local: bool) -> Path:
+    panoramix_cache_dir = Path(user_cache_dir("panoramix", "panoramix"))
+
+    if thread_local:
+        panoramix_cache_dir = panoramix_cache_dir / str(threading.get_ident())
+
     if not panoramix_cache_dir.is_dir():
         panoramix_cache_dir.mkdir(parents=True, exist_ok=True)
 

@@ -4,10 +4,9 @@ import logging
 import os
 import os.path
 import sys
-import threading
+from threading import local
 
 from panoramix.matcher import Any, match
-
 from panoramix.utils.helpers import (
     COLOR_BLUE,
     COLOR_BOLD,
@@ -19,49 +18,46 @@ from panoramix.utils.helpers import (
     COLOR_WARNING,
     ENDC,
     FAIL,
+    cache_dir,
     cleanup_mul_1,
     colorize,
     opcode,
-    cache_dir,
 )
 from panoramix.utils.supplement import fetch_sigs
 
 logger = logging.getLogger(__name__)
 
-_abi = None
-_func = None
-_lock = threading.Lock()
+_storage = local()
 
 
 def set_func_params_if_none(params):
-    if "params" not in _func:
+    global _storage
+    if "params" not in _storage.func:
         res = []
         for t, n in params.values():
             res.append({"type": t, "name": n})
 
-        _func["params"] = res
+        _storage.func["params"] = res
 
 
 def set_func(hash):
-    global _func
-    global _abi
+    global _storage
 
-    assert _abi is not None
-    _func = _abi[hash]
+    assert _storage.abi is not None
+    _storage.func = _storage.abi[hash]
 
 
 def get_param_name(cd, add_color=False, func=None):
-    global _func
-    global _abi
+    global _storage
     loc = match(cd, ("cd", ":loc")).loc
 
-    if _abi is None:
+    if _storage.abi is None:
         return cd
 
-    if _func is None:
+    if _storage.func is None:
         return cd
 
-    if "params" not in _func:
+    if "params" not in _storage.func:
         return cd
 
     if type(loc) != int:
@@ -79,8 +75,7 @@ def get_param_name(cd, add_color=False, func=None):
 
         if m := match(loc, ("add", ":int:offset", ("cd", ":point_loc"))):
             return colorize(
-                str(get_param_name(("cd", m.point_loc), func=func))
-                + f"[{(m.offset - 36)//32}]",
+                str(get_param_name(("cd", m.point_loc), func=func)) + f"[{(m.offset - 36)//32}]",
                 COLOR_GREEN,
                 add_color,
             )
@@ -91,22 +86,24 @@ def get_param_name(cd, add_color=False, func=None):
         return cd  #
 
     num = (cd[1] - 4) // 32
-    if num >= len(_func["params"]):
+    if num >= len(_storage.func["params"]):
         return cd
 
-    assert num < len(_func["params"]), str(cd) + " // " + str(func["params"])
+    assert num < len(_storage.func["params"]), str(cd) + " // " + str(func["params"])
 
-    return colorize(_func["params"][num]["name"], COLOR_GREEN, add_color)
+    return colorize(_storage.func["params"][num]["name"], COLOR_GREEN, add_color)
 
 
 def get_abi_name(hash):
-    a = _abi[hash]
+    global _storage
+    a = _storage.abi[hash]
     if "params" in a:
         return "{}({})".format(a["name"], ",".join([x["type"] for x in a["params"]]))
 
 
 def get_func_params(hash):
-    a = _abi[hash]
+    global _storage
+    a = _storage.abi[hash]
     if "params" in a:
         return a["params"]
     else:
@@ -114,7 +111,8 @@ def get_func_params(hash):
 
 
 def get_func_name(hash, add_color=False):
-    a = _abi[hash]
+    global _storage
+    a = _storage.abi[hash]
     if "params" in a:
         return "{}({})".format(
             a["name"],
@@ -160,17 +158,12 @@ def match_score(func, hashes):
 
 
 def make_abi(hash_targets):
-    global _abi
+    global _storage
 
     hash_name = str(sorted(list(hash_targets.keys()))).encode("utf-8")
     hash_name = hashlib.sha256(hash_name).hexdigest()
 
-    _lock.acquire()
-
-    dir_name = (
-        cache_dir() / "pabi" / hash_name[:3]
-    )  #:3, because there's not '0x' at the beginning
-
+    dir_name = cache_dir(True) / "pabi" / hash_name[:3]  #:3, because there's not '0x' at the beginning
 
     if not dir_name.is_dir():
         dir_name.mkdir(parents=True, exist_ok=True)
@@ -179,10 +172,9 @@ def make_abi(hash_targets):
 
     if cache_fname.is_file():
         with cache_fname.open() as f:
-            _abi = json.loads(f.read())
-        _lock.release()
+            _storage.abi = json.loads(f.read())
         logger.info("Cache for PABI found.")
-        return _abi
+        return _storage.abi
 
     logger.info("Cache for PABI not found, generating...")
 
@@ -222,12 +214,11 @@ def make_abi(hash_targets):
 
         result[h] = res
 
-    _abi = result
+    _storage.abi = result
 
     with cache_fname.open("w+") as f:
         f.write(json.dumps(result, indent=2))
 
-    _lock.release()
     logger.info("Cache for PABI generated.")
 
     return result

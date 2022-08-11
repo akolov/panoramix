@@ -2,6 +2,7 @@ import logging
 import sys
 from copy import deepcopy
 from functools import partial
+from threading import local
 
 import panoramix.core.arithmetic as arithmetic
 from panoramix.core.algebra import (
@@ -60,26 +61,24 @@ logger = logging.getLogger(__name__)
 """
 
 
-prev_trace = None
+_storage = local()
 
 
 def explain(title, trace):
-    global prev_trace
+    global _storage
 
     if "--explain" not in sys.argv:
         return
 
-    if trace == prev_trace:
+    if trace == _storage.prev_trace:
         return
 
     print("\n" + C.green_back + f" {title}: " + C.end + "\n")
     pprint_trace(trace)
-    prev_trace = trace
+    _storage.prev_trace = trace
 
 
 def explain_text(title, params):
-    global prev_trace
-
     if "--explain" not in sys.argv:
         return
 
@@ -113,7 +112,7 @@ def format_exp(exp):
     if type(exp) == str:
         return f'"{exp}"'
     if type(exp) == int:
-        if exp > 10 ** 6 and exp % 10 ** 6 != 0:
+        if exp > 10**6 and exp % 10**6 != 0:
             return hex(exp)
         else:
             return str(exp)
@@ -137,9 +136,7 @@ def format_exp(exp):
                 COLOR_GRAY
                 + "["
                 + ENDC
-                + f"{COLOR_GRAY}, {ENDC}".join(
-                    [opcode(exp)] + [format_exp(e) for e in exp[1:]]
-                )
+                + f"{COLOR_GRAY}, {ENDC}".join([opcode(exp)] + [format_exp(e) for e in exp[1:]])
                 + COLOR_GRAY
                 + "]"
                 + ENDC
@@ -235,9 +232,7 @@ def pprint_logic(exp, indent=2):
             vars = []
 
         for v in vars:
-            yield " " * indent + list(
-                pretty_line(("setvar", v[1], v[2]), add_color=True)
-            )[0]
+            yield " " * indent + list(pretty_line(("setvar", v[1], v[2]), add_color=True))[0]
 
         yield " " * indent + COLOR_GREEN + "while " + ENDC + prettify(
             cond, add_color=True, parentheses=False, rem_bool=True
@@ -250,48 +245,28 @@ def pprint_logic(exp, indent=2):
 
     elif opcode(exp) == "require":
         _, cond = exp
-        yield " " * indent + "require " + prettify(
-            exp[1], add_color=True, parentheses=False, rem_bool=True
-        ) + ""
+        yield " " * indent + "require " + prettify(exp[1], add_color=True, parentheses=False, rem_bool=True) + ""
 
-    elif m := match(
-        exp, ("if", ":cond", ":if_true")
-    ):  # one-sided ifs, only after folding
+    elif m := match(exp, ("if", ":cond", ":if_true")):  # one-sided ifs, only after folding
         cond, if_true = m.cond, m.if_true
-        if (
-            len(if_true) == 1
-            and (first := if_true[0])
-            and ((first == ("revert", 0)) or opcode(first) == "invalid")
-        ):
+        if len(if_true) == 1 and (first := if_true[0]) and ((first == ("revert", 0)) or opcode(first) == "invalid"):
             yield " " * indent + "require " + prettify(
                 is_zero(exp[1]), add_color=True, parentheses=False, rem_bool=True
             )
         else:
-            yield " " * indent + "if " + prettify(
-                exp[1], add_color=True, parentheses=False, rem_bool=True
-            ) + ":"
+            yield " " * indent + "if " + prettify(exp[1], add_color=True, parentheses=False, rem_bool=True) + ":"
             for l in pprint_logic(if_true, indent + INDENT_LEN):
                 yield l
 
     elif m := match(exp, ("if", ":cond", ":if_true", ":if_false")):
         cond, if_true, if_false = m.cond, m.if_true, m.if_false
-        if (
-            len(if_false) == 1
-            and (first := if_false[0])
-            and (first == ("revert", 0) or opcode(first) == "invalid")
-        ):
-            yield " " * indent + "require " + prettify(
-                exp[1], add_color=True, parentheses=False, rem_bool=True
-            )
+        if len(if_false) == 1 and (first := if_false[0]) and (first == ("revert", 0) or opcode(first) == "invalid"):
+            yield " " * indent + "require " + prettify(exp[1], add_color=True, parentheses=False, rem_bool=True)
 
             for l in pprint_logic(exp[2], indent):
                 yield l
 
-        elif (
-            len(if_true) == 1
-            and (first := if_true[0])
-            and ((first == ("revert", 0)) or opcode(first) == "invalid")
-        ):
+        elif len(if_true) == 1 and (first := if_true[0]) and ((first == ("revert", 0)) or opcode(first) == "invalid"):
             yield " " * indent + "require " + prettify(
                 is_zero(exp[1]), add_color=True, parentheses=False, rem_bool=True
             )
@@ -300,9 +275,7 @@ def pprint_logic(exp, indent=2):
                 yield l
 
         else:
-            yield " " * indent + "if " + prettify(
-                exp[1], add_color=True, parentheses=False, rem_bool=True
-            ) + ":"
+            yield " " * indent + "if " + prettify(exp[1], add_color=True, parentheses=False, rem_bool=True) + ":"
 
             for l in pprint_logic(if_true, indent + INDENT_LEN):
                 yield l
@@ -372,9 +345,7 @@ def pretty_line(r, add_color=True):
         for e in events:
             if type(e) != int:
                 for e in events[1:]:
-                    res_params = res_params + (
-                        prettify(e, add_color=False, parentheses=False),
-                    )
+                    res_params = res_params + (prettify(e, add_color=False, parentheses=False),)
                 events = [events[0]]
                 break
                 # breaks with more than one proper event
@@ -402,9 +373,7 @@ def pretty_line(r, add_color=True):
                 elif len(fparams) == len(res_params):
                     p_list = []
                     try:
-                        for idx, ptype, pname in [
-                            f"{idx} {p}".split(" ") for idx, p in enumerate(fparams)
-                        ]:
+                        for idx, ptype, pname in [f"{idx} {p}".split(" ") for idx, p in enumerate(fparams)]:
                             p_list.append((ptype, pname, res_params[int(idx)]))
                     except Exception:
                         logger.warning(f"weird log {e} {fparams}")
@@ -503,9 +472,9 @@ def pretty_line(r, add_color=True):
 
     elif opcode(r) == "selfdestruct":
         addr = r[1]
-        yield col("selfdestruct(", COLOR_WARNING) + col(
-            pret(addr, add_color=False, parentheses=False), FAIL
-        ) + col(")", COLOR_WARNING)
+        yield col("selfdestruct(", COLOR_WARNING) + col(pret(addr, add_color=False, parentheses=False), FAIL) + col(
+            ")", COLOR_WARNING
+        )
 
     elif m := match(r, ("precompiled", ":var_name", ":func_name", ":params")):
         yield "{} = {}({}) {}".format(
@@ -621,38 +590,24 @@ def pretty_line(r, add_color=True):
                 yield prettify(idx, add_color=add_color) + "++"
 
             elif v < 0:
-                yield prettify(idx, add_color=add_color) + " -= " + prettify(
-                    -v, add_color=add_color, parentheses=False
-                )
+                yield prettify(idx, add_color=add_color) + " -= " + prettify(-v, add_color=add_color, parentheses=False)
             else:
-                yield prettify(idx, add_color=add_color) + " += " + prettify(
-                    v, add_color=add_color, parentheses=False
-                )
+                yield prettify(idx, add_color=add_color) + " += " + prettify(v, add_color=add_color, parentheses=False)
 
         elif m := match(val, ("add", idx, ("mul", -1, ":v"))):
             v = m.v
-            yield prettify(idx, add_color=add_color) + " -= " + prettify(
-                v, add_color=add_color, parentheses=False
-            )
+            yield prettify(idx, add_color=add_color) + " -= " + prettify(v, add_color=add_color, parentheses=False)
         elif m := match(val, ("add", idx, ":v")):
             v = m.v
-            yield prettify(idx, add_color=add_color) + " += " + prettify(
-                v, add_color=add_color, parentheses=False
-            )
+            yield prettify(idx, add_color=add_color) + " += " + prettify(v, add_color=add_color, parentheses=False)
         elif m := match(val, ("add", ("mul", -1, ":v"), idx)):
             v = m.v
-            yield prettify(idx, add_color=add_color) + " -= " + prettify(
-                v, add_color=add_color, parentheses=False
-            )
+            yield prettify(idx, add_color=add_color) + " -= " + prettify(v, add_color=add_color, parentheses=False)
         elif m := match(val, ("add", ":v", idx)):
             v = m.v
-            yield prettify(idx, add_color=add_color) + " += " + prettify(
-                v, add_color=add_color, parentheses=False
-            )
+            yield prettify(idx, add_color=add_color) + " += " + prettify(v, add_color=add_color, parentheses=False)
         else:
-            yield prettify(idx, add_color=add_color) + " = " + prettify(
-                val, add_color=add_color, parentheses=False
-            )
+            yield prettify(idx, add_color=add_color) + " = " + prettify(val, add_color=add_color, parentheses=False)
 
     elif opcode(r) == "stop":
         yield "stop"
@@ -671,9 +626,7 @@ def pretty_line(r, add_color=True):
     elif r == ("revert", 0) or r == ("revert", ("mem", 0, 0)):
         yield "revert"
 
-    elif (
-        m := match(r, (":op", ("mem", ("range", ":mem_idx", ":mem_len"))))
-    ) and m.op in ("revert", "return"):
+    elif (m := match(r, (":op", ("mem", ("range", ":mem_idx", ":mem_len"))))) and m.op in ("revert", "return"):
         op, mem_idx, mem_len = m.op, m.mem_idx, m.mem_len
 
         if op == "revert":
@@ -705,9 +658,7 @@ def pretty_line(r, add_color=True):
             res_mem = list(res_mem)
             if res_mem[0] == "32":
                 res_mem.pop(0)
-                res_mem[0] = (
-                    "32, " + res_mem[0]
-                )  # happens often, this is probably an array structure,
+                res_mem[0] = "32, " + res_mem[0]  # happens often, this is probably an array structure,
                 # and sole `32` in first line looks ugly
 
             yield f"{op} {res_mem[0]}, "
@@ -741,10 +692,7 @@ def pretty_type(t):
 
     if m := match(t, ("def", ":name", ":loc", ("mask", ":size", ":off"))):
         return (
-            pretty_type(("def", m.name, m.loc, m.size))
-            + COLOR_GRAY
-            + (f" offset {m.off}" if m.off > 0 else "")
-            + ENDC
+            pretty_type(("def", m.name, m.loc, m.size)) + COLOR_GRAY + (f" offset {m.off}" if m.off > 0 else "") + ENDC
         )
 
     elif m := match(t, ("def", ":name", ":loc", ":bts")):
@@ -805,11 +753,7 @@ def pretty_stor(exp, add_color=True):
     if m := match(exp, ("type", ":size", ":loc")):
         if m.size == 256:
             # prettify removes 256 masks by default, force it
-            return (
-                col("uint256(", color=COLOR_GRAY)
-                + stor(m.loc)
-                + col(")", color=COLOR_GRAY)
-            )
+            return col("uint256(", color=COLOR_GRAY) + stor(m.loc) + col(")", color=COLOR_GRAY)
         else:
             return pret(("mask", m.size, 0, stor(m.loc)))
 
@@ -855,17 +799,15 @@ def pretty_num(exp, add_color):
         if exp - int(exp) == 0:
             exp = int(exp)
 
-    if type(exp) == int and exp > 8 ** 50:
-        return hex(
-            exp
-        )  # dealing with binary data probably, usually in call code - display in hex
+    if type(exp) == int and exp > 8**50:
+        return hex(exp)  # dealing with binary data probably, usually in call code - display in hex
 
     if type(exp) == int and exp != 0:
         count = 18
         while count >= 9:
 
-            if exp % (10 ** count) == 0:
-                if exp // (10 ** count) == 1:
+            if exp % (10**count) == 0:
+                if exp // (10**count) == 1:
                     return f"10^{count}"
                 else:
                     return f"{exp // (10**count)} * 10^{count}"
@@ -873,8 +815,8 @@ def pretty_num(exp, add_color):
             count -= 1
 
         count = 6
-        if exp % (10 ** count) == 0:
-            if exp // (10 ** count) == 1:
+        if exp % (10**count) == 0:
+            if exp // (10**count) == 1:
                 return f"10^{count}"
             else:
                 return f"{exp // (10**count)} * 10^{count}"
@@ -883,9 +825,7 @@ def pretty_num(exp, add_color):
         if try_fname(exp, add_color) != None:
             return try_fname(exp, add_color)
 
-        elif (
-            type(exp) == int and (exp & 2 ** 256 - 1) < 8 ** 30
-        ):  # if it's larger than 30 bytes, it's probably
+        elif type(exp) == int and (exp & 2**256 - 1) < 8**30:  # if it's larger than 30 bytes, it's probably
             # an address, not a negative number
             return str(to_real_int(exp))
 
@@ -932,9 +872,7 @@ def prettify(exp, rem_bool=False, parentheses=True, top_level=False, add_color=F
     if opcode(exp) in precompiled.values():
         return f"{exp[0]}({pret(exp[1])})"
 
-    if (
-        m := match(exp, ("arr", ":int:num", ("mask_shl", Any, Any, Any, ":str:s")))
-    ) and len(m.s) == m.num + 2:
+    if (m := match(exp, ("arr", ":int:num", ("mask_shl", Any, Any, Any, ":str:s")))) and len(m.s) == m.num + 2:
         return m.s
 
     if m := match(exp, ("param", ":name")):
@@ -1041,8 +979,7 @@ def prettify(exp, rem_bool=False, parentheses=True, top_level=False, add_color=F
     #        return pret(('mul', 32, val))
 
     if (
-        (m := match(exp, ("mask_shl", ":size", 5, 0, ":val")))
-        or (m := match(exp, ("mask", ":size", 5, ":val")))
+        (m := match(exp, ("mask_shl", ":size", 5, 0, ":val"))) or (m := match(exp, ("mask", ":size", 5, ":val")))
     ) and m.size > 245:
         size, val = m.size, m.val
         if m := match(val, ("add", 31, ":num")):
@@ -1050,9 +987,10 @@ def prettify(exp, rem_bool=False, parentheses=True, top_level=False, add_color=F
         else:
             return f"floor32({pret(val)})"
 
-    if (
-        m := match(exp, ("call.data", ("add", 36, ("param", ":p_name")), ":size"))
-    ) and m.size == ("cd", ("add", 4, ("param", m.p_name))):
+    if (m := match(exp, ("call.data", ("add", 36, ("param", ":p_name")), ":size"))) and m.size == (
+        "cd",
+        ("add", 4, ("param", m.p_name)),
+    ):
         return f"{col(m.p_name+'[', C.green)}" + "all" + col("]", C.green)
 
     if (m := match(exp, (":name", ":offset", ":size"))) and is_array(
@@ -1135,11 +1073,7 @@ def prettify(exp, rem_bool=False, parentheses=True, top_level=False, add_color=F
 
     if m := match(exp, ("mem", ("range", ":loc", ":size"))):
         return (
-            col("mem[", COLOR_HEADER)
-            + pret(m.loc)
-            + col(" len ", COLOR_HEADER)
-            + pret(m.size)
-            + col("]", COLOR_HEADER)
+            col("mem[", COLOR_HEADER) + pret(m.loc) + col(" len ", COLOR_HEADER) + pret(m.size) + col("]", COLOR_HEADER)
         )
 
     if m := match(exp, ("mem", ":idx")):
@@ -1156,12 +1090,7 @@ def prettify(exp, rem_bool=False, parentheses=True, top_level=False, add_color=F
     if m := match(exp, ("mask_shl", ":size", ":offset", ":shl", ":val")):
         size, offset, shl, val = m.size, m.offset, m.shl, m.val
 
-        if (
-            all_concrete(size, offset, shl)
-            and exp[1] + exp[2] == 256
-            and exp[2] == -exp[3]
-            and exp[2] < 8
-        ):
+        if all_concrete(size, offset, shl) and exp[1] + exp[2] == 256 and exp[2] == -exp[3] and exp[2] < 8:
             # e.g. (Mask(255, 1, eth.balance(this.address)) >> 1
             #           --> eth.balance(this.address) / 2
             # for offsets smaller than 8
@@ -1171,11 +1100,7 @@ def prettify(exp, rem_bool=False, parentheses=True, top_level=False, add_color=F
             else:
                 return pret(("shr", exp[3], exp[4]), parentheses=parentheses)
 
-        if (
-            (type(exp[1]), type(exp[2]), type(exp[3])) == (int, int, int)
-            and exp[2] == exp[3]
-            and exp[2] < 8
-        ):
+        if (type(exp[1]), type(exp[2]), type(exp[3])) == (int, int, int) and exp[2] == exp[3] and exp[2] < 8:
             # e.g. (Mask(255, 1, eth.balance(this.address)) << x
             #           --> eth.balance(this.address) * 2**x
             # for offsets smaller than 8
@@ -1190,9 +1115,23 @@ def prettify(exp, rem_bool=False, parentheses=True, top_level=False, add_color=F
             elif exp[3] <= 8 and exp[3] >= -8:
                 return pret(("mul", val, 2 ** exp[3]), parentheses=parentheses)
             elif exp[3] > 0:
-                return pret(("shl", exp[3], val,), parentheses=parentheses)
+                return pret(
+                    (
+                        "shl",
+                        exp[3],
+                        val,
+                    ),
+                    parentheses=parentheses,
+                )
             else:
-                return pret(("shr", -exp[3], val,), parentheses=parentheses)
+                return pret(
+                    (
+                        "shr",
+                        -exp[3],
+                        val,
+                    ),
+                    parentheses=parentheses,
+                )
 
         if all_concrete(size, offset, shl, val):
             return pret(apply_mask(exp[4], exp[1], exp[2], exp[3]))
@@ -1202,12 +1141,7 @@ def prettify(exp, rem_bool=False, parentheses=True, top_level=False, add_color=F
 
         elif safe_ge_zero(shl) is not False:
 
-            if (
-                all_concrete(size, offset, shl)
-                and size + shl == 256
-                and offset == 0
-                and shl > -8
-            ):
+            if all_concrete(size, offset, shl) and size + shl == 256 and offset == 0 and shl > -8:
                 exp = ("mul", 2 ** exp[3], exp[4])
             else:
                 if type(exp[3]) == int and exp[3] < 7 and exp[3] >= -8:
@@ -1234,9 +1168,7 @@ def prettify(exp, rem_bool=False, parentheses=True, top_level=False, add_color=F
                 type_name = mask_to_type(size)
 
             if type_name is not None:
-                return (
-                    col(type_name + "(", COLOR_GRAY) + pret(val) + col(")", COLOR_GRAY)
-                )
+                return col(type_name + "(", COLOR_GRAY) + pret(val) + col(")", COLOR_GRAY)
 
     if m := match(exp, ("bool", ":val")):
         if opcode(m.val) in ("lt", "gt", "iszero", "le", "ge", "bool"):
@@ -1247,7 +1179,7 @@ def prettify(exp, rem_bool=False, parentheses=True, top_level=False, add_color=F
     if m := match(exp, ("mask", ":size", ":offset", ":val")):
         size, offset, val = m.size, m.offset, m.val
         if type(size) == int and offset == 0 and size < 64:
-            return pret(("mod", val, 2 ** size), parentheses=parentheses)
+            return pret(("mod", val, 2**size), parentheses=parentheses)
         else:
             return "Mask({}, {}, {})".format(pret(size), pret(offset), pret(val))
 
@@ -1325,12 +1257,7 @@ def prettify(exp, rem_bool=False, parentheses=True, top_level=False, add_color=F
     if opcode(exp) == "add":
         return pretty_adds(exp)
 
-    if (
-        opcode(exp) == "mul"
-        and len(exp) == 3
-        and to_exp2(exp[1]) != None
-        and to_exp2(exp[1]) > 32
-    ):
+    if opcode(exp) == "mul" and len(exp) == 3 and to_exp2(exp[1]) != None and to_exp2(exp[1]) > 32:
         exp = ("shl", to_exp2(exp[1]), exp[2])
 
     if m := match(exp, ("mul", -1, ":val")):
@@ -1418,9 +1345,7 @@ def try_fname(exp, add_color=False):
         # a low chance for mistaking a random number for function sig
         return Loader.find_sig(padded_hex(exp, 64)[:10], add_color)
 
-    elif len(hex(exp)) >= 8 and Loader.find_sig(
-        padded_hex(exp, 8)[:10], add_color
-    ):  # in Loader.signatures:
+    elif len(hex(exp)) >= 8 and Loader.find_sig(padded_hex(exp, 8)[:10], add_color):  # in Loader.signatures:
         return Loader.find_sig(padded_hex(exp, 8)[:10], add_color)
 
     else:
@@ -1470,12 +1395,7 @@ def pretty_memory(exp, add_color=False):
 
     while idx < len(exp):
 
-        if (
-            idx == 0
-            and type(exp[0]) == tuple
-            and exp[0][:4] == ("mask_shl", 32, 224, 0)
-            and type(exp[0][4]) == int
-        ):
+        if idx == 0 and type(exp[0]) == tuple and exp[0][:4] == ("mask_shl", 32, 224, 0) and type(exp[0][4]) == int:
             # This happens often in Log and Revert, first
             # memory result being an 8-byte identifier.
             # Definitely deserves a more generic solution.
