@@ -4,7 +4,6 @@ import lzma
 import shutil
 from pathlib import Path
 
-from panoramix.env import DECOMPRESSED_SUPPLEMENTS
 from panoramix.utils.db import get_sqlite3_cursor
 from panoramix.utils.helpers import cache_dir, cached
 
@@ -41,14 +40,32 @@ def supplements_path():
     return cache_dir() / "supplement.db"
 
 
+def decompressed_supplements_path():
+    return Path(__file__).parent.parent / "data" / "supplement.db"
+
+
+def compressed_supplements_path():
+    return Path(__file__).parent.parent / "data" / "supplement.db.xz"
+
+
+def decompress_supplements():
+    compressed = compressed_supplements_path()
+    decompressed = decompressed_supplements_path()
+    if not decompressed.is_file():
+        with lzma.open(compressed) as inf, decompressed.open("wb") as outf:
+            while buf := inf.read(1024 * 1024):
+                outf.write(buf)
+
+
 def check_supplements():
     panoramix_supplements = supplements_path()
     if not panoramix_supplements.is_file():
-        if DECOMPRESSED_SUPPLEMENTS and Path(DECOMPRESSED_SUPPLEMENTS).is_file():
-            logger.info("Copying %s into %s...", DECOMPRESSED_SUPPLEMENTS, panoramix_supplements)
-            shutil.copy(DECOMPRESSED_SUPPLEMENTS, panoramix_supplements)
+        decompressed_supplements = decompressed_supplements_path()
+        if decompressed_supplements.is_file():
+            logger.info("Copying %s into %s...", decompressed_supplements, panoramix_supplements)
+            shutil.copy(decompressed_supplements, panoramix_supplements)
         else:
-            compressed_supplements = Path(__file__).parent.parent / "data" / "supplement.db.xz"
+            compressed_supplements = compressed_supplements_path()
             logger.info("Decompressing %s into %s...", compressed_supplements, panoramix_supplements)
             with lzma.open(compressed_supplements) as inf, panoramix_supplements.open("wb") as outf:
                 while buf := inf.read(1024 * 1024):
