@@ -41,7 +41,10 @@ _lock = threading.Lock()
 
 
 def supplements_path():
-    return cache_dir(False) / "supplement.db"
+    if decompressed_supplements_path().is_file:
+        return decompressed_supplements_path()
+    else:
+        return cache_dir(False) / "supplement.db"
 
 
 def decompressed_supplements_path():
